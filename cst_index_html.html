@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Prototipo CST - Asistente + Clasificación Masiva (ITP)</title>
+  <style>
+    :root{
+      --itp-rojo:#C00000;
+      --itp-azul:#003366;
+      --gris:#444444;
+      --fondo:#f5f5f5;
+      --card:#ffffff;
+    }
+    body{font-family:Arial,Helvetica,sans-serif;background:var(--fondo);color:var(--gris);margin:0}
+    header{background:var(--itp-rojo);color:#fff;padding:16px 24px;font-size:18px;font-weight:700}
+    .wrap{display:flex;gap:18px;padding:18px}
+    .col{background:var(--card);border-radius:8px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.06)}
+    .left{flex:1;min-width:320px}
+    .right{width:420px}
+    h3{margin:0 0 10px 0}
+    textarea{width:100%;height:140px;border:1px solid #ddd;border-radius:6px;padding:10px;resize:vertical}
+    button.btn{background:var(--itp-azul);color:#fff;border:none;padding:10px 14px;border-radius:6px;cursor:pointer}
+    button.btn.secondary{background:var(--itp-rojo)}
+    .result{margin-top:12px;padding:10px;border-radius:6px;background:#fafafa;border:1px solid #eee}
+    .levels{display:flex;gap:8px;margin-top:8px}
+    .level{background:#f7f7f7;border:1px solid #eee;padding:8px;border-radius:6px;flex:1;text-align:center}
+    .chat{height:380px; overflow:auto; border:1px solid #eee;padding:10px;border-radius:6px;background:#fff}
+    .chat .user{color:var(--itp-azul);font-weight:700}
+    .chat .bot{color:var(--gris)}
+    .bulk{margin-top:16px}
+    table{width:100%;border-collapse:collapse;margin-top:10px}
+    th,td{padding:8px;border-bottom:1px solid #eee;text-align:left}
+    .controls{display:flex;gap:8px;align-items:center}
+    .small{font-size:13px;color:#666}
+    input[type=file]{display:block}
+    .progress{height:6px;background:#e9e9e9;border-radius:3px;overflow:hidden;margin-top:8px}
+    .progress > i{display:block;height:100%;background:var(--itp-rojo);width:0%}
+    .footer{padding:12px 18px;color:#666;font-size:13px}
+  </style>
+</head>
+<body>
+  <header>ITP · Asistente Inteligente CST — Prototipo</header>
+
+  <div class="wrap">
+    <!-- LEFT: Individual classifier -->
+    <section class="col left">
+      <h3>Clasificación Individual</h3>
+      <p class="small">Ingrese la descripción del servicio y presione <strong>Clasificar</strong>.</p>
+      <textarea id="txtService" placeholder="Ej: Asistencia técnica en economía circular para manejo de mermas en la cadena agroindustrial..."></textarea>
+      <div style="margin-top:10px" class="controls">
+        <button class="btn" id="btnClassify">Clasificar</button>
+        <button class="btn secondary" id="btnCopy">Copiar resultado</button>
+      </div>
+
+      <div class="result" id="divResult">
+        <strong>Resultado:</strong>
+        <div class="levels" id="levels">
+          <div class="level">N2: -</div>
+          <div class="level">N3: -</div>
+          <div class="level">N4: -</div>
+          <div class="level">N5: -</div>
+          <div class="level">N6: -</div>
+        </div>
+        <div style="margin-top:10px">
+          <strong>Palabras clave detectadas:</strong>
+          <div id="keywords" class="small">-</div>
+        </div>
+        <div style="margin-top:10px">
+          <strong>Justificación (breve):</strong>
+          <div id="justification" class="small">-</div>
+        </div>
+      </div>
+
+      <div class="bulk">
+        <h3>Clasificación Masiva por CITE</h3>
+        <p class="small">Seleccione un CITE y cargue un archivo Excel/CSV con la lista de servicios (columna: <em>servicio</em>).</p>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="selectCite">
+            <option value="cite_lima">CITE Lima</option>
+            <option value="cite_arequipa">CITE Arequipa</option>
+            <option value="cite_trujillo">CITE Trujillo</option>
+          </select>
+          <input type="file" id="fileUpload" accept=".csv, .xlsx" />
+        </div>
+        <div class="progress" style="display:none" id="bulkProgress"><i></i></div>
+        <div style="margin-top:8px">
+          <button class="btn" id="btnBulk">Generar códigos masivos</button>
+          <button class="btn" id="btnDownload" style="display:none">Descargar Excel</button>
+        </div>
+
+        <div id="bulkTableWrap" style="margin-top:12px;display:none">
+          <table id="bulkTable"><thead><tr><th>Servicio</th><th>N2</th><th>N3</th><th>N4</th><th>N5</th><th>N6</th><th>Justificación</th></tr></thead><tbody></tbody></table>
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- RIGHT: Chat assistant -->
+    <aside class="col right">
+      <h3>Asistente IA (Chat)</h3>
+      <div class="chat" id="chatBox">
+        <div class="bot"><em>Hola — soy el asistente CST. Puedo explicar la clasificación o recomendar cambios.</em></div>
+      </div>
+      <div style="margin-top:8px;display:flex;gap:8px">
+        <input type="text" id="chatInput" placeholder="Pregúntale al asistente..." style="flex:1;padding:8px;border:1px solid #ddd;border-radius:6px" />
+        <button class="btn" id="btnChat">Enviar</button>
+      </div>
+
+      <div style="margin-top:14px">
+        <h4>Historial</h4>
+        <div class="small">Últimas 5 clasificaciones</div>
+        <ul id="history" class="small"></ul>
+      </div>
+    </aside>
+  </div>
+
+  <div class="footer">Prototipo: Conectar endpoints backend: <code>/api/classify</code> (POST), <code>/api/bulk_classify</code> (POST), <code>/api/chat</code> (POST). Ver documentación en comentarios.</div>
+
+<script>
+// ---------- PLACEHOLDERS / INTEGRACIÓN BACKEND ----------
+// Endpoints esperados (ejemplo):
+// 1) POST /api/classify  -> body: { text: "..." }
+//    response: { n2: "88", n3:"881", n4:"8815", n5:"88150", n6:"881507", keywords:["asistencia","mermas"], justification: "Texto..." }
+// 2) POST /api/bulk_classify -> multipart/form-data with file or body: { cite: "cite_lima", services: ["...","..."] }
+//    response: { results: [ {service: "...", n2:"88", n3:"...", n4:"...", n5:"...", n6:"...", justification: "..."}, ... ] }
+// 3) POST /api/chat -> body: { question: "..." }
+//    response: { answer: "..." }
+// --------------------------------------------------------
+
+const btnClassify = document.getElementById('btnClassify');
+const txtService = document.getElementById('txtService');
+const levels = document.getElementById('levels');
+const keywords = document.getElementById('keywords');
+const justification = document.getElementById('justification');
+const chatBox = document.getElementById('chatBox');
+const chatInput = document.getElementById('chatInput');
+const btnChat = document.getElementById('btnChat');
+const historyList = document.getElementById('history');
+const btnBulk = document.getElementById('btnBulk');
+const fileUpload = document.getElementById('fileUpload');
+const selectCite = document.getElementById('selectCite');
+const bulkProgress = document.getElementById('bulkProgress');
+const bulkTableWrap = document.getElementById('bulkTableWrap');
+const bulkTableBody = document.querySelector('#bulkTable tbody');
+const btnDownload = document.getElementById('btnDownload');
+
+// Simulación local (si no hay backend) - quitar en producción
+async function simulateClassify(text){
+  // simple heuristics for demo
+  const lower = text.toLowerCase();
+  const out = {n2:'88', n3:'881', n4:'8815', n5:'88150', n6:'881507', keywords:[], justification:'Coincidencia por palabras clave.'};
+  if(lower.includes('econom') || lower.includes('circular')) out.keywords.push('economía circular');
+  if(lower.includes('merma')) out.keywords.push('mermas');
+  if(out.keywords.length===0) out.keywords=['asistencia','asesoría'];
+  return new Promise(r=>setTimeout(()=>r(out),600));
+}
+
+// Update UI from response
+function renderResult(res){
+  const lvlEls = levels.querySelectorAll('.level');
+  lvlEls[0].textContent = 'N2: ' + (res.n2||'-');
+  lvlEls[1].textContent = 'N3: ' + (res.n3||'-');
+  lvlEls[2].textContent = 'N4: ' + (res.n4||'-');
+  lvlEls[3].textContent = 'N5: ' + (res.n5||'-');
+  lvlEls[4].textContent = 'N6: ' + (res.n6||'-');
+  keywords.textContent = (res.keywords||[]).join(', ');
+  justification.textContent = res.justification || res.reason || '-';
+}
+
+btnClassify.addEventListener('click', async ()=>{
+  const text = txtService.value.trim();
+  if(!text){alert('Ingrese una descripción');return}
+
+  // Si tienes backend, reemplaza simulateClassify con fetch
+  // Ejemplo:
+  // const resp = await fetch('/api/classify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+  // const data = await resp.json();
+
+  const data = await simulateClassify(text);
+  renderResult(data);
+
+  // agregar a historial
+  const li = document.createElement('li'); li.textContent = text.slice(0,80) + ' → ' + (data.n6||' - ');
+  historyList.prepend(li);
+  while(historyList.childNodes.length>5) historyList.removeChild(historyList.lastChild);
+});
+
+btnCopy.addEventListener('click', ()=>{
+  const txt = JSON.stringify({n2:document.querySelectorAll('.level')[0].textContent, n3:document.querySelectorAll('.level')[1].textContent});
+  navigator.clipboard.writeText(txt).then(()=>alert('Resultado copiado'));
+});
+
+// Chat
+btnChat.addEventListener('click', async ()=>{
+  const q = chatInput.value.trim(); if(!q) return;
+  // enviar a backend: POST /api/chat {question:q}
+  const userDiv = document.createElement('div'); userDiv.className='user'; userDiv.textContent='U: '+q; chatBox.appendChild(userDiv);
+  chatInput.value=''; chatBox.scrollTop = chatBox.scrollHeight;
+  // Simular respuesta
+  setTimeout(()=>{ const bot = document.createElement('div'); bot.className='bot'; bot.textContent='Bot: Explicación simulada sobre por qué se eligió X código.'; chatBox.appendChild(bot); chatBox.scrollTop = chatBox.scrollHeight},600);
+});
+
+// Bulk classify (file reading + send to backend placeholder)
+btnBulk.addEventListener('click', async ()=>{
+  const f = fileUpload.files[0];
+  if(!f){alert('Seleccione un archivo CSV o Excel con la columna "servicio"');return}
+  bulkProgress.style.display='block'; bulkProgress.querySelector('i').style.width='0%';
+
+  // Read as text if CSV for demo
+  const reader = new FileReader();
+  reader.onload = async (ev)=>{
+    // parse CSV simple: split lines -> assume first column is service
+    const txt = ev.target.result;
+    const lines = txt.split(/\r?\n/).filter(Boolean);
+    const services = lines.map(l=>l.split(',')[0]);
+
+    // simulate sending to /api/bulk_classify
+    bulkProgress.querySelector('i').style.width='30%';
+    await new Promise(r=>setTimeout(r,500));
+    bulkProgress.querySelector('i').style.width='60%';
+
+    // simulate response
+    const results = services.map(s=>({service:s, n2:'88', n3:'881', n4:'8815', n5:'88150', n6:'881507', justification:'Simulación'}));
+    bulkProgress.querySelector('i').style.width='100%';
+    setTimeout(()=>bulkProgress.style.display='none',400);
+
+    // render table
+    bulkTableBody.innerHTML='';
+    results.forEach(r=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${escapeHtml(r.service)}</td><td>${r.n2}</td><td>${r.n3}</td><td>${r.n4}</td><td>${r.n5}</td><td>${r.n6}</td><td>${escapeHtml(r.justification)}</td>`;
+      bulkTableBody.appendChild(tr);
+    });
+    bulkTableWrap.style.display='block';
+    btnDownload.style.display='inline-block';
+
+    // store results for download
+    window._bulkResults = results;
+  };
+
+  // handle csv only in demo; in production send file to backend via fetch multipart/form-data
+  if(f.name.endsWith('.csv')) reader.readAsText(f, 'utf-8'); else { alert('En demo solo CSV. En producción enviar archivo al backend.'); }
+});
+
+btnDownload.addEventListener('click', ()=>{
+  const rows = window._bulkResults || [];
+  if(!rows.length) return alert('No hay resultados para descargar');
+  // create CSV
+  let csv = 'servicio,n2,n3,n4,n5,n6,justificacion\n';
+  rows.forEach(r=>{csv += `"${r.service.replace(/"/g,'""')}",${r.n2},${r.n3},${r.n4},${r.n5},${r.n6},"${r.justification.replace(/"/g,'""')}"\n`});
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download = 'cst_bulk_results.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+});
+
+function escapeHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+</script>
+</body>
+</html>
